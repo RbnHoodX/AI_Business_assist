@@ -5,3 +5,7 @@ __pycache__/
 data/business.db
 data/pdfs/
 .claude/
+.streamlit/secrets.toml
+.playwright-mcp/
+webdemo_verify.png
+Untitled-1

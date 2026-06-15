@@ -27,10 +27,16 @@ python -m data.generate_pdfs
 ## Run
 
 ```bash
-python demo.py                              # example questions, full trace
-python -m assistant.cli "your question"     # single question
+streamlit run app.py                        # web UI
+python demo.py                              # example questions, full trace (CLI)
+python -m assistant.cli "your question"     # single question (CLI)
 python self_test.py                         # tests (--offline skips API calls)
 ```
+
+The web UI and CLI show the same thing. The web version is in `app.py`; it reads
+`ANTHROPIC_API_KEY` from `.env` locally, or from Streamlit secrets when deployed
+(`.streamlit/secrets.toml.example` lists the keys). The sample data is built on
+first run if it isn't there yet.
 
 The CLI prints every step: the routing decision, the generated SQL and rows,
 the retrieved PDF pages, the answer with `[DB:...]` / `[DOC:...]` citations,
