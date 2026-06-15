@@ -139,29 +139,49 @@ def retrieve(
     *,
     restrict_files: list[str] | None = None,
     top_k: int | None = None,
+    per_file: int = 3,
 ) -> list[DocHit]:
-    """Return the top BM25-ranked page chunks for a query.
+    """Return ranked page chunks for a query.
 
-    If restrict_files is non-empty, the search is scoped to those PDFs first
-    (entity linking from the SQL step). Falls back to the full corpus if the
-    scope is empty.
+    Two modes:
+      - entity-scoped (restrict_files set): the SQL step has already picked the
+        relevant documents, so return the top `per_file` pages of EACH of those
+        documents. This guarantees every linked contract/project contributes its
+        most relevant sections, instead of a global top-k that can let the best
+        pages of one document crowd out another's (e.g. a drifting query ranking
+        every contract's termination page above its penalty page). It also lets a
+        document whose pages don't lexically match the query (a Hebrew contract
+        under an English query) still surface its pages for the model to read.
+      - unscoped: a global BM25 top-k over the whole corpus.
     """
     top_k = top_k or config.DOC_TOP_K
     chunks = _index()
+    scoped = chunks
     if restrict_files:
-        scoped = [c for c in chunks if c.file in set(restrict_files)]
-        chunks = scoped or chunks
-    if not chunks:
+        sel = [c for c in chunks if c.file in set(restrict_files)]
+        scoped = sel or chunks
+    if not scoped:
         return []
 
-    bm = _BM25(chunks)
+    bm = _BM25(scoped)
     q = _tokenize(query)
-    scored = [(bm.score(q, i), c) for i, c in enumerate(chunks)]
-    scored.sort(key=lambda x: x[0], reverse=True)
+    scored = [(bm.score(q, i), c) for i, c in enumerate(scoped)]
 
+    if restrict_files:
+        by_file: dict[str, list[tuple[float, Chunk]]] = {}
+        for s, c in scored:
+            by_file.setdefault(c.file, []).append((s, c))
+        hits: list[DocHit] = []
+        for items in by_file.values():
+            items.sort(key=lambda x: x[0], reverse=True)
+            hits.extend(DocHit(chunk=c, score=s) for s, c in items[:per_file])
+        hits.sort(key=lambda h: h.score, reverse=True)
+        return hits
+
+    scored.sort(key=lambda x: x[0], reverse=True)
     hits = [DocHit(chunk=c, score=s) for s, c in scored if s > 0][:top_k]
-    if not hits:  # query terms missed entirely (e.g. cross-language) -> first pages
-        hits = [DocHit(chunk=c, score=0.0) for c in chunks[:top_k]]
+    if not hits:  # query terms missed entirely -> fall back to first pages
+        hits = [DocHit(chunk=c, score=0.0) for c in scoped[:top_k]]
     return hits
 
 

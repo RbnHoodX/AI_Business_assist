@@ -8,8 +8,8 @@ What contracts expire in the next 90 days and what penalties are defined in thos
 1. ROUTING DECISION
 ──────────────────────────────────────────────────────────────────────────────
 sources : sql, docs
-doc query: penalty clauses
-reasoning: The date filter for contracts expiring within 90 days requires the SQL database, while the penalty terms must come from the contract PDFs.
+doc query: penalties
+reasoning: The date filter for contracts expiring within 90 days comes from sql, while the penalty clauses come from the linked contract PDFs.
 
 ──────────────────────────────────────────────────────────────────────────────
 2. STRUCTURED RETRIEVAL (SQLite)
@@ -20,8 +20,8 @@ generated SQL:
     LEFT JOIN customers cu ON cu.id = c.customer_id
     WHERE date(c.end_date) >= date('2026-06-10')
       AND date(c.end_date) <= date('2026-06-10', '+90 days')
-    ORDER BY c.end_date;
-intent: Returns contracts ending within 90 days of the current date along with their linked PDF document files, where penalty clauses are defined.
+    ORDER BY date(c.end_date) ASC
+intent: Finds contracts whose end_date falls within 90 days of the current date, including their document_file so penalty clauses can be pulled from the linked PDFs.
 
 4 row(s):
   [DB:contracts:C004] {"id": "C004", "customer_id": "CUST004", "customer_name": "Halcyon Media", "title": "Halcyon Data Processing Agreement", "status": "active", "start_date": "2024-07-01", "end_date": "2026-06-30", "annual_value": 90000, "document_file": "contract_C004.pdf"}
@@ -35,22 +35,33 @@ linked documents (entity match): contract_C004.pdf, contract_C001.pdf, contract_
 3. UNSTRUCTURED RETRIEVAL (PDF spans, BM25)
 ──────────────────────────────────────────────────────────────────────────────
 scoped to: contract_C004.pdf, contract_C001.pdf, contract_C006.pdf, contract_C002.pdf
-  [DOC:contract_C002.pdf:p4]  score= 1.65  3. Penalties
-  [DOC:contract_C004.pdf:p4]  score= 1.65  3. Penalties
-  [DOC:contract_C001.pdf:p4]  score= 1.64  3. Penalties
+  [DOC:contract_C002.pdf:p4]  score= 2.45  3. Penalties
+  [DOC:contract_C004.pdf:p4]  score= 2.45  3. Penalties
+  [DOC:contract_C001.pdf:p4]  score= 2.43  3. Penalties
+  [DOC:contract_C001.pdf:p1]  score= 0.00  Riverstone Manufacturing — Master Agreement (C001)
+  [DOC:contract_C001.pdf:p2]  score= 0.00  1. Term and Renewal
+  [DOC:contract_C002.pdf:p1]  score= 0.00  Cobalt Software — Master Agreement (C002)
+  [DOC:contract_C002.pdf:p2]  score= 0.00  1. Term and Renewal
+  [DOC:contract_C004.pdf:p1]  score= 0.00  Halcyon Media — Master Agreement (C004)
+  [DOC:contract_C004.pdf:p2]  score= 0.00  1. Term and Renewal
+  [DOC:contract_C006.pdf:p1]  score= 0.00  הסכם שירותי סייבר — טכנולוגיות גליל (C006)
+  [DOC:contract_C006.pdf:p2]  score= 0.00  1. תקופת ההתקשרות
+  [DOC:contract_C006.pdf:p3]  score= 0.00  2. קנסות
 
 ──────────────────────────────────────────────────────────────────────────────
 4. GROUNDED ANSWER
 ──────────────────────────────────────────────────────────────────────────────
-Four active contracts expire within the next 90 days (between 2026-06-10 and 2026-09-08):
+Relative to today's date (2026-06-10), the following contracts expire within the next 90 days (i.e., on or before 2026-09-08):
 
-1. Halcyon Data Processing Agreement (Halcyon Media, C004) — expires 2026-06-30, annual value $90,000 [DB:contracts:C004]. Penalty: late-delivery penalty of $750 per business day for a missed committed milestone, capped at $15,000 per milestone; penalties are the Customer's sole financial remedy for delay and are credited against future invoices [DOC:contract_C004.pdf:p4].
+1. Halcyon Media — Halcyon Data Processing Agreement (C004): expires 2026-06-30, annual value $90,000 [DB:contracts:C004]. Penalty: if the Provider fails to deliver a committed milestone by its due date, a late-delivery penalty of $750 per business day applies, capped at $15,000 per milestone; penalties are the Customer's sole financial remedy for delay and are credited against future invoices [DOC:contract_C004.pdf:p4].
 
-2. Riverstone Master Services Agreement (Riverstone Manufacturing, C001) — expires 2026-07-15, annual value $240,000 [DB:contracts:C001]. Penalty: late-delivery penalty of $1,000 per business day for a missed committed milestone, capped at $25,000 per milestone; penalties are the Customer's sole financial remedy for delay and are credited against future invoices [DOC:contract_C001.pdf:p4].
+2. Riverstone Manufacturing — Riverstone Master Services Agreement (C001): expires 2026-07-15, annual value $240,000 [DB:contracts:C001]. Penalty: late-delivery penalty of $1,000 per business day, capped at $25,000 per milestone; penalties are the Customer's sole financial remedy for delay and are credited against future invoices [DOC:contract_C001.pdf:p4].
 
-3. Galil Cyber Services / שירותי סייבר (Galil Technologies, C006) — expires 2026-08-05, annual value $150,000 [DB:contracts:C006]. No penalty document span was supplied for this contract.
+3. Galil Technologies / טכנולוגיות גליל — Galil Cyber Services (C006): expires 2026-08-05, annual value $150,000 [DB:contracts:C006]. Penalty: a late-delivery penalty of ₪3,000 per business day applies, up to an aggregate cap of ₪60,000 per milestone [DOC:contract_C006.pdf:p3].
 
-4. Cobalt SaaS Subscription (Cobalt Software, C002) — expires 2026-08-20, annual value $120,000 [DB:contracts:C002]. Penalty: late-delivery penalty of $500 per business day for a missed committed milestone, capped at $10,000 per milestone; penalties are the Customer's sole financial remedy for delay and are credited against future invoices [DOC:contract_C002.pdf:p4].
+4. Cobalt Software — Cobalt SaaS Subscription (C002): expires 2026-08-20, annual value $120,000 [DB:contracts:C002]. Penalty: late-delivery penalty of $500 per business day, capped at $10,000 per milestone; penalties are the Customer's sole financial remedy for delay and are credited against future invoices [DOC:contract_C002.pdf:p4].
+
+Note: All four contracts contain auto-renewal clauses for successive 12-month periods unless written notice of non-renewal is given at least 60 days before expiry [DOC:contract_C001.pdf:p2][DOC:contract_C002.pdf:p2][DOC:contract_C004.pdf:p2][DOC:contract_C006.pdf:p2].
 
 inline citations:
   ✓ [DB:contracts:C004]
@@ -58,13 +69,18 @@ inline citations:
   ✓ [DB:contracts:C001]
   ✓ [DOC:contract_C001.pdf:p4]
   ✓ [DB:contracts:C006]
+  ✓ [DOC:contract_C006.pdf:p3]
   ✓ [DB:contracts:C002]
   ✓ [DOC:contract_C002.pdf:p4]
+  ✓ [DOC:contract_C001.pdf:p2]
+  ✓ [DOC:contract_C002.pdf:p2]
+  ✓ [DOC:contract_C004.pdf:p2]
+  ✓ [DOC:contract_C006.pdf:p2]
 
 ──────────────────────────────────────────────────────────────────────────────
 5. CITATION VERIFICATION
 ──────────────────────────────────────────────────────────────────────────────
-resolved to retrieved evidence: 7/7
+resolved to retrieved evidence: 12/12
 all citations resolve to retrieved evidence.
 
 
@@ -77,21 +93,29 @@ Which customers have overdue payments and what does the agreement say about serv
 1. ROUTING DECISION
 ──────────────────────────────────────────────────────────────────────────────
 sources : sql, docs
-doc query: service suspension terms for non-payment
-reasoning: The question mixes a data filter (customers with overdue payments) requiring sql with a question about what the agreement says about service suspension requiring docs.
+doc query: service suspension terms
+reasoning: The customer list with overdue payments comes from the database, while service suspension terms come from the linked contract PDFs.
 
 ──────────────────────────────────────────────────────────────────────────────
 2. STRUCTURED RETRIEVAL (SQLite)
 ──────────────────────────────────────────────────────────────────────────────
 generated SQL:
-    SELECT DISTINCT c.id AS customer_id, c.name AS customer_name, c.country, c.account_owner, p.id AS payment_id, p.contract_id, p.amount, p.due_date, p.status AS payment_status, ct.id AS contract_id_ref, ct.title AS contract_title, ct.document_file FROM payments p JOIN customers c ON p.customer_id = c.id LEFT JOIN contracts ct ON p.contract_id = ct.id WHERE p.status = 'overdue' ORDER BY c.name, p.due_date
-intent: Lists customers with overdue payments along with their linked contract document files so service-suspension clauses can be retrieved from the agreement PDFs.
+    SELECT c.id AS customer_id, c.name AS customer_name, c.country, c.account_owner,
+           p.id AS payment_id, p.amount, p.due_date, p.status AS payment_status,
+           ct.id AS contract_id, ct.title AS contract_title, ct.status AS contract_status,
+           ct.document_file
+    FROM payments p
+    JOIN customers c ON c.id = p.customer_id
+    LEFT JOIN contracts ct ON ct.id = p.contract_id
+    WHERE p.status = 'overdue'
+    ORDER BY c.name, p.due_date
+intent: Lists customers with overdue payments along with their linked contract document files so the service-suspension clauses can be pulled from the agreement PDFs.
 
 4 row(s):
-  [DB:payments:PAY006] {"customer_id": "CUST006", "customer_name": "Galil Technologies / טכנולוגיות גליל", "country": "Israel", "account_owner": "Noa Bar", "payment_id": "PAY006", "contract_id": "C006", "amount": 12500, "due_date": "2026-05-05", "payment_status": "overdue", "contract_id_ref": "C006", "contract_title": "Galil Cyber Services / שירותי סייבר", "document_file": "contract_C006.pdf"}
-  [DB:payments:PAY003] {"customer_id": "CUST003", "customer_name": "Greenfield Logistics", "country": "USA", "account_owner": "Omer Cohen", "payment_id": "PAY003", "contract_id": "C003", "amount": 5000, "due_date": "2026-05-20", "payment_status": "overdue", "contract_id_ref": "C003", "contract_title": "Greenfield Support & Maintenance", "document_file": "contract_C003.pdf"}
-  [DB:payments:PAY005] {"customer_id": "CUST005", "customer_name": "Meridian Retail", "country": "USA", "account_owner": "Dana Levi", "payment_id": "PAY005", "contract_id": "C005", "amount": 25000, "due_date": "2026-03-10", "payment_status": "overdue", "contract_id_ref": "C005", "contract_title": "Meridian Software License", "document_file": "contract_C005.pdf"}
-  [DB:payments:PAY001] {"customer_id": "CUST001", "customer_name": "Riverstone Manufacturing", "country": "USA", "account_owner": "Dana Levi", "payment_id": "PAY001", "contract_id": "C001", "amount": 20000, "due_date": "2026-05-01", "payment_status": "overdue", "contract_id_ref": "C001", "contract_title": "Riverstone Master Services Agreement", "document_file": "contract_C001.pdf"}
+  [DB:payments:PAY006] {"customer_id": "CUST006", "customer_name": "Galil Technologies / טכנולוגיות גליל", "country": "Israel", "account_owner": "Noa Bar", "payment_id": "PAY006", "amount": 12500, "due_date": "2026-05-05", "payment_status": "overdue", "contract_id": "C006", "contract_title": "Galil Cyber Services / שירותי סייבר", "contract_status": "active", "document_file": "contract_C006.pdf"}
+  [DB:payments:PAY003] {"customer_id": "CUST003", "customer_name": "Greenfield Logistics", "country": "USA", "account_owner": "Omer Cohen", "payment_id": "PAY003", "amount": 5000, "due_date": "2026-05-20", "payment_status": "overdue", "contract_id": "C003", "contract_title": "Greenfield Support & Maintenance", "contract_status": "active", "document_file": "contract_C003.pdf"}
+  [DB:payments:PAY005] {"customer_id": "CUST005", "customer_name": "Meridian Retail", "country": "USA", "account_owner": "Dana Levi", "payment_id": "PAY005", "amount": 25000, "due_date": "2026-03-10", "payment_status": "overdue", "contract_id": "C005", "contract_title": "Meridian Software License", "contract_status": "active", "document_file": "contract_C005.pdf"}
+  [DB:payments:PAY001] {"customer_id": "CUST001", "customer_name": "Riverstone Manufacturing", "country": "USA", "account_owner": "Dana Levi", "payment_id": "PAY001", "amount": 20000, "due_date": "2026-05-01", "payment_status": "overdue", "contract_id": "C001", "contract_title": "Riverstone Master Services Agreement", "contract_status": "active", "document_file": "contract_C001.pdf"}
 
 linked documents (entity match): contract_C006.pdf, contract_C003.pdf, contract_C005.pdf, contract_C001.pdf
 
@@ -99,27 +123,33 @@ linked documents (entity match): contract_C006.pdf, contract_C003.pdf, contract_
 3. UNSTRUCTURED RETRIEVAL (PDF spans, BM25)
 ──────────────────────────────────────────────────────────────────────────────
 scoped to: contract_C006.pdf, contract_C003.pdf, contract_C005.pdf, contract_C001.pdf
-  [DOC:contract_C001.pdf:p5]  score= 6.19  4. Service Suspension
-  [DOC:contract_C003.pdf:p5]  score= 6.19  4. Service Suspension
-  [DOC:contract_C005.pdf:p5]  score= 6.19  4. Service Suspension
-  [DOC:contract_C001.pdf:p3]  score= 2.77  2. Payment Terms
-  [DOC:contract_C003.pdf:p3]  score= 2.77  2. Payment Terms
-  [DOC:contract_C005.pdf:p3]  score= 2.77  2. Payment Terms
+  [DOC:contract_C001.pdf:p5]  score= 4.17  4. Service Suspension
+  [DOC:contract_C003.pdf:p5]  score= 4.17  4. Service Suspension
+  [DOC:contract_C005.pdf:p5]  score= 4.17  4. Service Suspension
+  [DOC:contract_C001.pdf:p3]  score= 1.38  2. Payment Terms
+  [DOC:contract_C003.pdf:p3]  score= 1.38  2. Payment Terms
+  [DOC:contract_C005.pdf:p3]  score= 1.38  2. Payment Terms
+  [DOC:contract_C001.pdf:p1]  score= 1.32  Riverstone Manufacturing — Master Agreement (C001)
+  [DOC:contract_C003.pdf:p1]  score= 1.32  Greenfield Logistics — Master Agreement (C003)
+  [DOC:contract_C005.pdf:p1]  score= 1.32  Meridian Retail — Master Agreement (C005)
+  [DOC:contract_C006.pdf:p1]  score= 0.00  הסכם שירותי סייבר — טכנולוגיות גליל (C006)
+  [DOC:contract_C006.pdf:p2]  score= 0.00  1. תקופת ההתקשרות
+  [DOC:contract_C006.pdf:p3]  score= 0.00  2. קנסות
 
 ──────────────────────────────────────────────────────────────────────────────
 4. GROUNDED ANSWER
 ──────────────────────────────────────────────────────────────────────────────
 Four customers currently have overdue payments:
 
-1. Riverstone Manufacturing (USA, account owner Dana Levi) — $20,000 overdue, due 2026-05-01 under the Riverstone Master Services Agreement (C001) [DB:payments:PAY001]. The agreement allows the Provider to suspend Services, in whole or in part, if undisputed fees remain overdue for more than 15 days after written notice; suspension does not relieve the Customer of payment obligations, and Services are restored within two business days of full payment [DOC:contract_C001.pdf:p5]. Fees are due within 30 days of the invoice date and accrue interest at 1.5% per month if unpaid [DOC:contract_C001.pdf:p3].
+1. Riverstone Manufacturing (USA, account owner Dana Levi) — $20,000 overdue, due 2026-05-01, under the Riverstone Master Services Agreement (C001) [DB:payments:PAY001]. The agreement allows the Provider to suspend Services, in whole or in part, if undisputed fees remain overdue for more than 15 days after written notice; suspension does not relieve the Customer of payment obligations, and Services are restored within two business days of full payment [DOC:contract_C001.pdf:p5]. Fees are due within 30 days of invoice and overdue amounts accrue interest at 1.5% per month [DOC:contract_C001.pdf:p3].
 
-2. Greenfield Logistics (USA, account owner Omer Cohen) — $5,000 overdue, due 2026-05-20 under Greenfield Support & Maintenance (C003) [DB:payments:PAY003]. The agreement permits suspension if undisputed fees remain overdue for more than 20 days after written notice, with the same restoration-within-two-business-days terms [DOC:contract_C003.pdf:p5]. Payment terms are 30 days from invoice date with 1.5% monthly interest on late amounts [DOC:contract_C003.pdf:p3].
+2. Greenfield Logistics (USA, account owner Omer Cohen) — $5,000 overdue, due 2026-05-20, under Greenfield Support & Maintenance (C003) [DB:payments:PAY003]. The Provider may suspend Services if undisputed fees remain overdue for more than 20 days after written notice; suspension does not relieve payment obligations, with restoration within two business days of full payment [DOC:contract_C003.pdf:p5]. Fees are due within 30 days and accrue 1.5% monthly interest if unpaid [DOC:contract_C003.pdf:p3].
 
-3. Meridian Retail (USA, account owner Dana Levi) — $25,000 overdue, due 2026-03-10 under the Meridian Software License (C005) [DB:payments:PAY005]. The agreement permits suspension if undisputed fees remain overdue for more than 25 days after written notice, with restoration within two business days of full payment [DOC:contract_C005.pdf:p5]. Payment terms are 30 days from invoice date with 1.5% monthly interest [DOC:contract_C005.pdf:p3].
+3. Meridian Retail (USA, account owner Dana Levi) — $25,000 overdue, due 2026-03-10, under the Meridian Software License (C005) [DB:payments:PAY005]. The Provider may suspend Services if undisputed fees remain overdue for more than 25 days after written notice; suspension does not relieve payment obligations, with restoration within two business days of full payment [DOC:contract_C005.pdf:p5]. Fees are due within 30 days and accrue 1.5% monthly interest if unpaid [DOC:contract_C005.pdf:p3].
 
-4. Galil Technologies / טכנולוגיות גליל (Israel, account owner Noa Bar) — $12,500 overdue, due 2026-05-05 under Galil Cyber Services (C006) [DB:payments:PAY006].
+4. Galil Technologies / טכנולוגיות גליל (Israel, account owner Noa Bar) — ₪12,500 overdue, due 2026-05-05, under the Galil Cyber Services agreement (C006) [DB:payments:PAY006].
 
-Given today's date (2026-06-10), all four overdue items are well past their due dates, and the suspension thresholds (15/20/25 days after written notice) would be exceeded for the three contracts where suspension clauses are provided.
+Note: The Galil Cyber Services contract (C006) is the most overdue-relevant for Israel, but the available document spans for it cover only the term/renewal clause [DOC:contract_C006.pdf:p2] and a late-delivery penalty of ₪3,000 per business day up to ₪60,000 per milestone [DOC:contract_C006.pdf:p3]; no service-suspension clause was provided in the evidence for C006.
 
 inline citations:
   ✓ [DB:payments:PAY001]
@@ -132,11 +162,13 @@ inline citations:
   ✓ [DOC:contract_C005.pdf:p5]
   ✓ [DOC:contract_C005.pdf:p3]
   ✓ [DB:payments:PAY006]
+  ✓ [DOC:contract_C006.pdf:p2]
+  ✓ [DOC:contract_C006.pdf:p3]
 
 ──────────────────────────────────────────────────────────────────────────────
 5. CITATION VERIFICATION
 ──────────────────────────────────────────────────────────────────────────────
-resolved to retrieved evidence: 10/10
+resolved to retrieved evidence: 12/12
 all citations resolve to retrieved evidence.
 
 
@@ -149,24 +181,20 @@ Show all active projects and summarize the risks mentioned in their documentatio
 1. ROUTING DECISION
 ──────────────────────────────────────────────────────────────────────────────
 sources : sql, docs
-doc query: project risks
-reasoning: Listing active projects requires the SQL status filter while summarizing risks requires reading the linked project PDFs.
+doc query: risks
+reasoning: Listing active projects is a structured filter (sql) while summarizing their documented risks requires the project PDFs (docs).
 
 ──────────────────────────────────────────────────────────────────────────────
 2. STRUCTURED RETRIEVAL (SQLite)
 ──────────────────────────────────────────────────────────────────────────────
 generated SQL:
-    SELECT p.id, p.customer_id, c.name AS customer_name, p.name AS project_name, p.status, p.start_date, p.document_file
-    FROM projects p
-    LEFT JOIN customers c ON p.customer_id = c.id
-    WHERE p.status = 'active'
-    ORDER BY p.start_date;
-intent: Lists all active projects with their linked documentation file so the risks described in each PDF can be summarized.
+    SELECT p.id, p.name, p.status, p.start_date, p.document_file, c.id AS customer_id, c.name AS customer_name FROM projects p LEFT JOIN customers c ON p.customer_id = c.id WHERE p.status = 'active' ORDER BY p.start_date;
+intent: Returns all active projects with their linked document files so the risk clauses can be pulled from each project's documentation.
 
 3 row(s):
-  [DB:projects:P002] {"id": "P002", "customer_id": "CUST002", "customer_name": "Cobalt Software", "project_name": "Cobalt ERP Rollout", "status": "active", "start_date": "2025-11-01", "document_file": "project_P002.pdf"}
-  [DB:projects:P001] {"id": "P001", "customer_id": "CUST001", "customer_name": "Riverstone Manufacturing", "project_name": "Riverstone Cloud Migration", "status": "active", "start_date": "2026-01-10", "document_file": "project_P001.pdf"}
-  [DB:projects:P004] {"id": "P004", "customer_id": "CUST006", "customer_name": "Galil Technologies / טכנולוגיות גליל", "project_name": "Galil Cyber Defense / הגנת סייבר", "status": "active", "start_date": "2026-02-15", "document_file": "project_P004.pdf"}
+  [DB:projects:P002] {"id": "P002", "name": "Cobalt ERP Rollout", "status": "active", "start_date": "2025-11-01", "document_file": "project_P002.pdf", "customer_id": "CUST002", "customer_name": "Cobalt Software"}
+  [DB:projects:P001] {"id": "P001", "name": "Riverstone Cloud Migration", "status": "active", "start_date": "2026-01-10", "document_file": "project_P001.pdf", "customer_id": "CUST001", "customer_name": "Riverstone Manufacturing"}
+  [DB:projects:P004] {"id": "P004", "name": "Galil Cyber Defense / הגנת סייבר", "status": "active", "start_date": "2026-02-15", "document_file": "project_P004.pdf", "customer_id": "CUST006", "customer_name": "Galil Technologies / טכנולוגיות גליל"}
 
 linked documents (entity match): project_P002.pdf, project_P001.pdf, project_P004.pdf
 
@@ -174,23 +202,25 @@ linked documents (entity match): project_P002.pdf, project_P001.pdf, project_P00
 3. UNSTRUCTURED RETRIEVAL (PDF spans, BM25)
 ──────────────────────────────────────────────────────────────────────────────
 scoped to: project_P002.pdf, project_P001.pdf, project_P004.pdf
-  [DOC:project_P002.pdf:p3]  score= 1.72  Risks
-  [DOC:project_P001.pdf:p3]  score= 1.66  Risks
-  [DOC:project_P001.pdf:p1]  score= 0.38  Riverstone Cloud Migration — Project Charter
-  [DOC:project_P002.pdf:p1]  score= 0.38  Cobalt ERP Rollout — Project Charter
-  [DOC:project_P001.pdf:p2]  score= 0.38  Scope and Objectives
-  [DOC:project_P002.pdf:p2]  score= 0.38  Scope and Objectives
+  [DOC:project_P002.pdf:p3]  score= 1.48  Risks
+  [DOC:project_P001.pdf:p3]  score= 1.43  Risks
+  [DOC:project_P001.pdf:p1]  score= 0.00  Riverstone Cloud Migration — Project Charter
+  [DOC:project_P001.pdf:p2]  score= 0.00  Scope and Objectives
+  [DOC:project_P002.pdf:p1]  score= 0.00  Cobalt ERP Rollout — Project Charter
+  [DOC:project_P002.pdf:p2]  score= 0.00  Scope and Objectives
+  [DOC:project_P004.pdf:p1]  score= 0.00  הגנת סייבר — סטארק (P004)
+  [DOC:project_P004.pdf:p2]  score= 0.00  סיכונים
 
 ──────────────────────────────────────────────────────────────────────────────
 4. GROUNDED ANSWER
 ──────────────────────────────────────────────────────────────────────────────
-There are three active projects. Two of them have documented risk registers; one does not have risk documentation in the supplied evidence.
+Active projects and their documented risks:
 
-1. Riverstone Cloud Migration (P001) — Riverstone Manufacturing, started 2026-01-10 [DB:projects:P001]. Documented risks: (R1) data migration cutover may exceed the maintenance window, risking extended downtime for order-processing systems; (R2) the legacy application has undocumented dependencies that could surface late in testing and delay go-live; (R3) the key cloud-architect is allocated only part-time, creating a single point of failure for delivery [DOC:project_P001.pdf:p3].
+1. Riverstone Cloud Migration (P001) — Customer: Riverstone Manufacturing; started 2026-01-10; status active [DB:projects:P001]. Documented risks: (R1) Data migration cutover may exceed the maintenance window, risking extended downtime for order-processing systems; (R2) the legacy application has undocumented dependencies that could surface late in testing and delay go-live; (R3) the key cloud architect is allocated only part-time, creating a single point of failure for delivery [DOC:project_P001.pdf:p3].
 
-2. Cobalt ERP Rollout (P002) — Cobalt Software, started 2025-11-01 [DB:projects:P002]. Documented risks: (R1) scope creep from finance stakeholders threatens the Phase 2 timeline; (R2) poor master-data quality in the legacy ERP may require manual cleansing before load; (R3) integration with the third-party tax engine depends on a vendor API still in beta [DOC:project_P002.pdf:p3].
+2. Cobalt ERP Rollout (P002) — Customer: Cobalt Software; started 2025-11-01; status active [DB:projects:P002]. Documented risks: (R1) Scope creep from finance stakeholders threatens the Phase 2 timeline; (R2) poor master-data quality in the legacy ERP may require manual cleansing before load; (R3) integration with the third-party tax engine depends on a vendor API still in beta [DOC:project_P002.pdf:p3].
 
-3. Galil Cyber Defense / הגנת סייבר (P004) — Galil Technologies / טכנולוגיות גליל, started 2026-02-15 [DB:projects:P004]. No risk documentation was provided for this project in the supplied evidence.
+3. Galil Cyber Defense / הגנת סייבר (P004) — Customer: Galil Technologies / טכנולוגיות גליל; started 2026-02-15; status active [DB:projects:P004]. Documented risks: (R1) a shortage of experienced information-security staff may delay system deployment; (R2) dependence on an external vendor for 24/7 monitoring poses a service-availability risk; (R3) sensitive customer data could be exposed if access controls are not properly implemented [DOC:project_P004.pdf:p2].
 
 inline citations:
   ✓ [DB:projects:P001]
@@ -198,11 +228,12 @@ inline citations:
   ✓ [DB:projects:P002]
   ✓ [DOC:project_P002.pdf:p3]
   ✓ [DB:projects:P004]
+  ✓ [DOC:project_P004.pdf:p2]
 
 ──────────────────────────────────────────────────────────────────────────────
 5. CITATION VERIFICATION
 ──────────────────────────────────────────────────────────────────────────────
-resolved to retrieved evidence: 5/5
+resolved to retrieved evidence: 6/6
 all citations resolve to retrieved evidence.
 
 
@@ -215,15 +246,20 @@ QUESTION
 1. ROUTING DECISION
 ──────────────────────────────────────────────────────────────────────────────
 sources : sql, docs
-doc query: penalty clauses defined in contracts
-reasoning: The question mixes a date filter on contract expiration (sql) with what the contracts say about penalties (docs).
+doc query: קנסות
+reasoning: The question mixes a date filter on expiring contracts (sql) with what the contracts define as penalties (docs).
 
 ──────────────────────────────────────────────────────────────────────────────
 2. STRUCTURED RETRIEVAL (SQLite)
 ──────────────────────────────────────────────────────────────────────────────
 generated SQL:
-    SELECT c.id, c.customer_id, cu.name AS customer_name, c.title, c.status, c.start_date, c.end_date, c.annual_value, c.document_file FROM contracts c LEFT JOIN customers cu ON cu.id = c.customer_id WHERE c.end_date >= '2026-06-10' AND c.end_date <= date('2026-06-10', '+90 days') ORDER BY c.end_date;
-intent: Lists contracts expiring within the next 90 days along with their linked PDF so penalty clauses can be pulled from the document text.
+    SELECT c.id, c.customer_id, cu.name AS customer_name, c.title, c.status, c.start_date, c.end_date, c.annual_value, c.document_file
+    FROM contracts c
+    JOIN customers cu ON cu.id = c.customer_id
+    WHERE c.end_date >= date('2026-06-10')
+      AND c.end_date <= date('2026-06-10', '+90 days')
+    ORDER BY c.end_date ASC;
+intent: Lists contracts expiring within the next 90 days from today, including the linked PDF so penalty/fine clauses can be retrieved from the document text.
 
 4 row(s):
   [DB:contracts:C004] {"id": "C004", "customer_id": "CUST004", "customer_name": "Halcyon Media", "title": "Halcyon Data Processing Agreement", "status": "active", "start_date": "2024-07-01", "end_date": "2026-06-30", "annual_value": 90000, "document_file": "contract_C004.pdf"}
@@ -237,41 +273,54 @@ linked documents (entity match): contract_C004.pdf, contract_C001.pdf, contract_
 3. UNSTRUCTURED RETRIEVAL (PDF spans, BM25)
 ──────────────────────────────────────────────────────────────────────────────
 scoped to: contract_C004.pdf, contract_C001.pdf, contract_C006.pdf, contract_C002.pdf
-  [DOC:contract_C002.pdf:p4]  score= 1.65  3. Penalties
-  [DOC:contract_C004.pdf:p4]  score= 1.65  3. Penalties
-  [DOC:contract_C001.pdf:p4]  score= 1.64  3. Penalties
-  [DOC:contract_C001.pdf:p5]  score= 0.80  4. Service Suspension
-  [DOC:contract_C002.pdf:p5]  score= 0.80  4. Service Suspension
-  [DOC:contract_C004.pdf:p5]  score= 0.80  4. Service Suspension
+  [DOC:contract_C006.pdf:p3]  score= 3.11  2. קנסות
+  [DOC:contract_C001.pdf:p1]  score= 0.00  Riverstone Manufacturing — Master Agreement (C001)
+  [DOC:contract_C001.pdf:p2]  score= 0.00  1. Term and Renewal
+  [DOC:contract_C001.pdf:p3]  score= 0.00  2. Payment Terms
+  [DOC:contract_C002.pdf:p1]  score= 0.00  Cobalt Software — Master Agreement (C002)
+  [DOC:contract_C002.pdf:p2]  score= 0.00  1. Term and Renewal
+  [DOC:contract_C002.pdf:p3]  score= 0.00  2. Payment Terms
+  [DOC:contract_C004.pdf:p1]  score= 0.00  Halcyon Media — Master Agreement (C004)
+  [DOC:contract_C004.pdf:p2]  score= 0.00  1. Term and Renewal
+  [DOC:contract_C004.pdf:p3]  score= 0.00  2. Payment Terms
+  [DOC:contract_C006.pdf:p1]  score= 0.00  הסכם שירותי סייבר — טכנולוגיות גליל (C006)
+  [DOC:contract_C006.pdf:p2]  score= 0.00  1. תקופת ההתקשרות
 
 ──────────────────────────────────────────────────────────────────────────────
 4. GROUNDED ANSWER
 ──────────────────────────────────────────────────────────────────────────────
-חלון 90 הימים הקרובים (10.6.2026–8.9.2026) כולל ארבעה חוזים פגי תוקף:
+בטווח 90 הימים הקרובים (עד 2026-09-08) פגי תוקף ארבעה חוזים פעילים:
 
-1. Halcyon Data Processing Agreement (לקוח: Halcyon Media) — פג תוקף ב-30.6.2026 [DB:contracts:C004]. הקנס המוגדר: קנס איחור באספקת אבן דרך של 750$ ליום עסקים, עד תקרה מצטברת של 15,000$ לכל אבן דרך; הקנס הוא הסעד הכספי היחיד של הלקוח בגין עיכוב ומזוכה כנגד חשבוניות עתידיות [DOC:contract_C004.pdf:p4].
+1. **Halcyon Data Processing Agreement (C004)** – Halcyon Media, מועד פקיעה 2026-06-30, ערך שנתי 90,000 [DB:contracts:C004]. בחוזה לא מוגדר קנס פיגורים ספציפי, אך סכומים שלא שולמו במועד צוברים ריבית של 1.5% לחודש [DOC:contract_C004.pdf:p3].
 
-2. Riverstone Master Services Agreement (לקוח: Riverstone Manufacturing) — פג תוקף ב-15.7.2026 [DB:contracts:C001]. הקנס המוגדר: קנס איחור באספקת אבן דרך של 1,000$ ליום עסקים, עד תקרה מצטברת של 25,000$ לכל אבן דרך; הקנס הוא הסעד הכספי היחיד בגין עיכוב ומזוכה כנגד חשבוניות עתידיות [DOC:contract_C001.pdf:p4].
+2. **Riverstone Master Services Agreement (C001)** – Riverstone Manufacturing, מועד פקיעה 2026-07-15, ערך שנתי 240,000 [DB:contracts:C001]. אין קנס פיגורים מוגדר, אך סכומים שלא שולמו במועד צוברים ריבית של 1.5% לחודש [DOC:contract_C001.pdf:p3].
 
-3. Galil Cyber Services / שירותי סייבר (לקוח: Galil Technologies / טכנולוגיות גליל) — פג תוקף ב-5.8.2026 [DB:contracts:C006]. לא נמצאה במסמכים סעיף קנסות לחוזה זה.
+3. **Galil Cyber Services / שירותי סייבר (C006)** – Galil Technologies / טכנולוגיות גליל, מועד פקיעה 2026-08-05, ערך שנתי 150,000 [DB:contracts:C006]. במקרה של איחור באספקת אבן דרך חל קנס פיגורים בסך 3,000 ש"ח לכל יום עסקים, עד לתקרה מצטברת של 60,000 ש"ח לאבן דרך [DOC:contract_C006.pdf:p3].
 
-4. Cobalt SaaS Subscription (לקוח: Cobalt Software) — פג תוקף ב-20.8.2026 [DB:contracts:C002]. הקנס המוגדר: קנס איחור באספקת אבן דרך של 500$ ליום עסקים, עד תקרה מצטברת של 10,000$ לכל אבן דרך; הקנס הוא הסעד הכספי היחיד בגין עיכוב ומזוכה כנגד חשבוניות עתידיות [DOC:contract_C002.pdf:p4].
+4. **Cobalt SaaS Subscription (C002)** – Cobalt Software, מועד פקיעה 2026-08-20, ערך שנתי 120,000 [DB:contracts:C002]. אין קנס פיגורים מוגדר, אך סכומים שלא שולמו במועד צוברים ריבית של 1.5% לחודש [DOC:contract_C002.pdf:p3].
+
+הערה: בכל ארבעת החוזים קיים חידוש אוטומטי לתקופות בנות 12 חודשים אלא אם נמסרה הודעת אי-חידוש בכתב לפחות 60 יום לפני הפקיעה [DOC:contract_C001.pdf:p2][DOC:contract_C002.pdf:p2][DOC:contract_C004.pdf:p2][DOC:contract_C006.pdf:p2].
 
 coverage gaps:
-  • לא נמצא סעיף קנסות במסמכים עבור חוזה C006 (Galil Cyber Services)
+  • בחוזים C001, C002 ו-C004 לא נמצאו סעיפי קנס פיגורים ייעודיים בראיות — צוין רק חיוב ריבית פיגורים של 1.5% לחודש
 
 inline citations:
   ✓ [DB:contracts:C004]
-  ✓ [DOC:contract_C004.pdf:p4]
+  ✓ [DOC:contract_C004.pdf:p3]
   ✓ [DB:contracts:C001]
-  ✓ [DOC:contract_C001.pdf:p4]
+  ✓ [DOC:contract_C001.pdf:p3]
   ✓ [DB:contracts:C006]
+  ✓ [DOC:contract_C006.pdf:p3]
   ✓ [DB:contracts:C002]
-  ✓ [DOC:contract_C002.pdf:p4]
+  ✓ [DOC:contract_C002.pdf:p3]
+  ✓ [DOC:contract_C001.pdf:p2]
+  ✓ [DOC:contract_C002.pdf:p2]
+  ✓ [DOC:contract_C004.pdf:p2]
+  ✓ [DOC:contract_C006.pdf:p2]
 
 ──────────────────────────────────────────────────────────────────────────────
 5. CITATION VERIFICATION
 ──────────────────────────────────────────────────────────────────────────────
-resolved to retrieved evidence: 7/7
+resolved to retrieved evidence: 12/12
 all citations resolve to retrieved evidence.
 

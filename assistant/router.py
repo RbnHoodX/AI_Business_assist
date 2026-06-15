@@ -24,9 +24,11 @@ Rules:
   what penalties do they define" needs sql (the date filter) and docs (the
   penalty clauses). Prefer both when the question mixes a data filter with a
   question about what a document says.
-- For the document side, write 'doc_query': a short phrase describing what to
-  look for in the PDFs (e.g. "late delivery penalty clause", "service
-  suspension terms", "project risks"). Leave it empty if docs are not needed.
+- For the document side, write 'doc_query': a short, faithful phrase naming the
+  exact thing the user asked about in the PDFs (e.g. "penalties", "service
+  suspension terms", "project risks"). Use the user's own wording; do NOT add
+  adjacent concepts they did not ask about (e.g. don't turn "penalties" into
+  "termination or breach"). Leave it empty if docs are not needed.
 - 'reasoning' is one sentence explaining the routing decision.
 Answer by calling the 'route' tool. Respond in the same spirit regardless of
 the question's language (English or Hebrew)."""
