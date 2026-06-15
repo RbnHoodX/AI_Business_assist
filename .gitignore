@@ -2,8 +2,6 @@
 .venv/
 __pycache__/
 *.pyc
-data/business.db
-data/pdfs/
 .claude/
 .streamlit/secrets.toml
 .playwright-mcp/

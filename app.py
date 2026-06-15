@@ -43,15 +43,17 @@ MAX_QUERIES = int(secret("MAX_QUERIES", "25"))
 # --- one-time data build -----------------------------------------------------
 @st.cache_resource(show_spinner="Preparing sample data...")
 def _ensure_data() -> dict:
-    """Build the sample DB and PDFs once per container if they are missing."""
-    from assistant import config
-    from data import build_database, generate_pdfs
+    """Make sure the sample data exists. On the deployed app the DB and the
+    parsed corpus cache are committed, so this is a no-op and nothing heavy
+    (reportlab / pdfplumber) is imported at runtime."""
+    from assistant import config, doc_retriever
 
     if not config.DB_PATH.exists():
+        from data import build_database
         build_database.build()
-    if not any(config.PDF_DIR.glob("*.pdf")):
+    if not doc_retriever.CORPUS_JSON.exists():
+        from data import generate_pdfs
         generate_pdfs.build()
-    from assistant import doc_retriever
     return doc_retriever.corpus_stats()
 
 

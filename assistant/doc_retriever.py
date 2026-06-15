@@ -8,21 +8,26 @@ later is a local change.
 
 When the SQL step has already narrowed to specific rows, we pass their linked
 PDFs as restrict_files and rank within that subset only.
+
+The parsed page text is cached to data/corpus.json. When that file is present
+(committed for deployment) the index loads from it, so the runtime needs neither
+pdfplumber nor the PDFs in memory. pdfplumber is imported lazily and only used
+to build the cache the first time.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-import pdfplumber
-
 from . import config
 
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 _ENTITY = re.compile(r"(?:contract|project)_([A-Za-z0-9]+)\.pdf$", re.IGNORECASE)
+CORPUS_JSON = config.DATA_DIR / "corpus.json"
 
 
 def _tokenize(text: str) -> list[str]:
@@ -43,10 +48,11 @@ class Chunk:
         return f"DOC:{self.file}:p{self.page}"
 
 
-@lru_cache(maxsize=1)
-def _index() -> list[Chunk]:
-    """Parse every PDF in data/pdfs into page-level chunks (cached)."""
-    chunks: list[Chunk] = []
+def _parse_pdfs() -> list[dict]:
+    """Extract page-level text from every PDF (lazy pdfplumber import)."""
+    import pdfplumber  # heavy; only needed when (re)building the cache
+
+    pages: list[dict] = []
     for path in sorted(config.PDF_DIR.glob("*.pdf")):
         m = _ENTITY.search(path.name)
         entity_id = m.group(1).upper() if m else path.stem
@@ -55,12 +61,32 @@ def _index() -> list[Chunk]:
                 text = (page.extract_text() or "").strip()
                 if not text:
                     continue
-                heading = text.split("\n", 1)[0].strip()
-                chunks.append(Chunk(
-                    file=path.name, page=i, entity_id=entity_id,
-                    heading=heading, text=text, tokens=_tokenize(text),
-                ))
-    return chunks
+                pages.append({
+                    "file": path.name, "page": i, "entity_id": entity_id,
+                    "heading": text.split("\n", 1)[0].strip(), "text": text,
+                })
+    return pages
+
+
+def build_corpus_cache() -> int:
+    """Parse the PDFs and write data/corpus.json. Returns the page count."""
+    pages = _parse_pdfs()
+    CORPUS_JSON.write_text(json.dumps(pages, ensure_ascii=False, indent=1))
+    return len(pages)
+
+
+@lru_cache(maxsize=1)
+def _index() -> list[Chunk]:
+    """Load page chunks from the cache, or parse the PDFs if it is missing."""
+    if CORPUS_JSON.exists():
+        pages = json.loads(CORPUS_JSON.read_text())
+    else:
+        pages = _parse_pdfs()
+    return [
+        Chunk(file=p["file"], page=p["page"], entity_id=p["entity_id"],
+              heading=p["heading"], text=p["text"], tokens=_tokenize(p["text"]))
+        for p in pages
+    ]
 
 
 class _BM25:

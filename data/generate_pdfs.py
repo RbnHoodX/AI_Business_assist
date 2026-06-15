@@ -192,6 +192,11 @@ def build() -> None:
              "R3. נתוני לקוח רגישים עלולים להיחשף אם בקרת ההרשאות לא תיושם כראוי."),
          ])
 
+    # Extract the page text into data/corpus.json so the deployed app can load
+    # the corpus without pdfplumber or the PDFs at runtime.
+    from assistant import doc_retriever
+    n = doc_retriever.build_corpus_cache()
+    print(f"  wrote corpus.json ({n} page chunks)")
     print("Done.")
 
 
