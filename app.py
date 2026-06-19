@@ -94,7 +94,9 @@ def _render(trace) -> None:
 
     r = trace.route
     st.subheader("1. Routing decision")
-    st.write(f"**Intent:** {r.intent}")
+    intent = getattr(r, "intent", "")
+    if intent:
+        st.write(f"**Intent:** {intent}")
     st.write(f"**Sources:** {' + '.join(r.sources)}")
     if r.doc_query:
         st.write(f"**Document query:** {r.doc_query}")
