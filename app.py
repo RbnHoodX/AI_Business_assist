@@ -82,7 +82,9 @@ SAMPLE_QUESTIONS = [
     "about service suspension?",
     "Show all active projects and summarize the risks mentioned in their "
     "documentation.",
-    "How many active contracts are there and what is their total annual value?",
+    "Compare the penalty terms in the Riverstone and Cobalt contracts.",
+    "Which customer with an overdue payment should we suspend first, based on "
+    "the agreements?",
     "אילו חוזים פגי תוקף ב-90 הימים הקרובים ומהם הקנסות המוגדרים בהם?",
 ]
 
@@ -92,6 +94,7 @@ def _render(trace) -> None:
 
     r = trace.route
     st.subheader("1. Routing decision")
+    st.write(f"**Intent:** {r.intent}")
     st.write(f"**Sources:** {' + '.join(r.sources)}")
     if r.doc_query:
         st.write(f"**Document query:** {r.doc_query}")

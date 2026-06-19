@@ -40,6 +40,7 @@ def render(trace: Trace) -> None:
 
     # 1. Routing
     print(header("1. ROUTING DECISION"))
+    print(f"{label('intent  ')}: {trace.route.intent}")
     print(f"{label('sources ')}: {', '.join(trace.route.sources)}")
     if trace.route.doc_query:
         print(f"{label('doc query')}: {trace.route.doc_query}")

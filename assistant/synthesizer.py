@@ -91,11 +91,36 @@ def _evidence_block(sql: SqlResult | None, hits: list[DocHit]) -> str:
     return "\n".join(parts)
 
 
-def synthesize(question: str, sql: SqlResult | None, hits: list[DocHit]) -> Answer:
+# How the answer should be shaped for each question intent. The grounding and
+# citation rules are identical; only the form of the answer changes.
+INTENT_GUIDANCE = {
+    "facts": "The user wants direct facts. Answer concisely, the facts and their "
+             "citations, no extra interpretation.",
+    "summary": "The user wants a summary. Condense the evidence into the key "
+               "points; do not list every raw row.",
+    "analysis": "The user wants analysis. State the facts, then explain what they "
+                "imply (risk, exposure, timing), strictly within the evidence.",
+    "comparison": "The user wants a comparison. Contrast the entities side by "
+                  "side on the relevant dimensions; make the differences explicit.",
+    "recommendation": "The user wants a recommendation. Give a clear, grounded "
+                      "recommendation with its rationale, and note what is "
+                      "assumed or missing. Recommend only what the evidence "
+                      "supports.",
+}
+
+
+def synthesize(
+    question: str,
+    sql: SqlResult | None,
+    hits: list[DocHit],
+    intent: str = "facts",
+) -> Answer:
+    guidance = INTENT_GUIDANCE.get(intent, INTENT_GUIDANCE["facts"])
     user = (
         f"Today's date is {config.REFERENCE_DATE}. Treat any date reasoning "
         f"(e.g. 'next 90 days') as relative to this date; do not hedge about not "
         f"knowing the current date.\n\n"
+        f"Question intent: {intent}. {guidance}\n\n"
         f"User question:\n{question}\n\n"
         f"EVIDENCE (cite by the bracketed id):\n{_evidence_block(sql, hits)}"
     )

@@ -22,6 +22,13 @@ QUESTIONS = [
     "Show all active projects and summarize the risks mentioned in their "
     "documentation.",
 
+    # Intent = comparison: contrast clauses across two named contracts.
+    "Compare the penalty terms in the Riverstone and Cobalt contracts.",
+
+    # Intent = recommendation: advise an action, grounded in data + documents.
+    "Which customer with an overdue payment should we suspend first, based on "
+    "the agreements?",
+
     # Hebrew: same hybrid flow, answered in Hebrew.
     "אילו חוזים פגי תוקף ב-90 הימים הקרובים ומהם הקנסות המוגדרים בהם?",
 ]

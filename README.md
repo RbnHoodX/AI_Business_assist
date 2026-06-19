@@ -38,7 +38,10 @@ The web UI and CLI show the same thing. The web version is in `app.py`; it reads
 (`.streamlit/secrets.toml.example` lists the keys). The sample data is built on
 first run if it isn't there yet.
 
-The CLI prints every step: the routing decision, the generated SQL and rows,
-the retrieved PDF pages, the answer with `[DB:...]` / `[DOC:...]` citations,
-and a final check that each citation matches something actually retrieved.
-`demo_output.txt` has sample runs.
+The router makes two decisions per question: the **intent** (facts, summary,
+analysis, comparison, or recommendation), which shapes how the answer is
+written, and the **sources** (database, documents, or both). The CLI prints
+every step: the routing decision, the generated SQL and rows, the retrieved PDF
+pages, the answer with `[DB:...]` / `[DOC:...]` citations, and a final check that
+each citation matches something actually retrieved. `demo_output.txt` has sample
+runs. The model is Claude (Anthropic) — set in `assistant/config.py`.

@@ -51,8 +51,10 @@ def answer(question: str) -> Trace:
             doc_query, restrict_files=restrict or None
         )
 
-    # 3. Grounded synthesis over the merged evidence.
-    trace.answer = synthesizer.synthesize(question, trace.sql, trace.doc_hits)
+    # 3. Grounded synthesis over the merged evidence, shaped by the intent.
+    trace.answer = synthesizer.synthesize(
+        question, trace.sql, trace.doc_hits, intent=r.intent
+    )
 
     # 4. Verify inline citations resolve to retrieved evidence (traceability).
     available = trace.available_citation_ids()
