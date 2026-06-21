@@ -159,6 +159,14 @@ def main() -> None:
     from assistant import config, doc_retriever
     from assistant.pipeline import answer
 
+    # On a Streamlit Cloud redeploy the entry script can reload a moment before
+    # its imported modules do. Detect that stale window and ask for a refresh
+    # instead of crashing with an AttributeError.
+    if not hasattr(doc_retriever, "parse_pdf_bytes"):
+        st.warning("The app is finishing an update. Please reload the page in a "
+                   "minute (or use Manage app → Reboot).")
+        st.stop()
+
     stats = _ensure_data()
 
     # --- uploaded documents (parsed once per file, kept for the session) -----
