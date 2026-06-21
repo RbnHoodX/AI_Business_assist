@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import doc_retriever, router, sql_retriever, synthesizer
-from .doc_retriever import DocHit
+from .doc_retriever import Chunk, DocHit
 from .router import Route
 from .sql_retriever import SqlResult
 from .synthesizer import Answer
@@ -34,26 +34,38 @@ class Trace:
         return ids
 
 
-def answer(question: str) -> Trace:
+def answer(
+    question: str,
+    *,
+    extra_docs: list[Chunk] | None = None,
+    allow_ungrounded: bool = False,
+) -> Trace:
     r = router.route(question)
+    # If the user uploaded documents, always consult them even if the router
+    # leaned SQL-only.
+    if extra_docs and not r.needs_docs:
+        r.sources = sorted(set(r.sources) | {"docs"})
+        r.doc_query = r.doc_query or question
     trace = Trace(question=question, route=r)
 
     # 1. Structured retrieval.
     if r.needs_sql:
         trace.sql = sql_retriever.retrieve(question)
 
-    # 2. Unstructured retrieval, scoped to the entities the SQL step linked.
+    # 2. Unstructured retrieval, scoped to the entities the SQL step linked,
+    #    plus any uploaded documents.
     if r.needs_docs:
         restrict = trace.sql.document_files() if trace.sql else []
         trace.restrict_files = restrict
         doc_query = r.doc_query or question
         trace.doc_hits = doc_retriever.retrieve(
-            doc_query, restrict_files=restrict or None
+            doc_query, restrict_files=restrict or None, extra=extra_docs
         )
 
     # 3. Grounded synthesis over the merged evidence, shaped by the intent.
     trace.answer = synthesizer.synthesize(
-        question, trace.sql, trace.doc_hits, intent=r.intent
+        question, trace.sql, trace.doc_hits, intent=r.intent,
+        allow_ungrounded=allow_ungrounded,
     )
 
     # 4. Verify inline citations resolve to retrieved evidence (traceability).

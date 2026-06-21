@@ -128,6 +128,10 @@ def _render(trace) -> None:
 
     st.subheader("4. Grounded answer")
     if trace.answer:
+        if trace.answer.is_ungrounded:
+            st.warning("This answer contains content that is **not grounded** in "
+                       "the database or documents (general knowledge), shown "
+                       "because the fallback option is enabled.")
         # Escape '$' so Streamlit doesn't treat "$x ... $y" as LaTeX math.
         st.markdown(trace.answer.text.replace("$", "\\$"))
         if trace.answer.coverage_gaps:
@@ -140,6 +144,9 @@ def _render(trace) -> None:
     if trace.invalid_citations:
         st.error(f"{len(trace.valid_citations)}/{total} citations resolve. "
                  f"Unverified: {trace.invalid_citations}")
+    elif total == 0:
+        st.info("No citations in this answer (nothing was drawn from the "
+                "sources).")
     else:
         st.success(f"All {total} citations resolve to a retrieved row or "
                    f"document page.")
@@ -149,11 +156,13 @@ def main() -> None:
     if not _gate():
         return
 
-    from assistant import config
+    from assistant import config, doc_retriever
     from assistant.pipeline import answer
 
     stats = _ensure_data()
 
+    # --- uploaded documents (parsed once per file, kept for the session) -----
+    extra_docs = []
     with st.sidebar:
         st.header("Business Knowledge Assistant")
         st.caption(
@@ -165,9 +174,44 @@ def main() -> None:
         st.divider()
         st.write(f"**Model:** {config.MODEL}")
         st.write(f"**Reference date:** {config.REFERENCE_DATE}")
-        st.write(f"**Corpus:** {stats['pdfs']} PDFs, "
+        st.write(f"**Corpus:** {stats['pdfs']} sample PDFs, "
                  f"{stats['page_chunks']} pages")
-        st.caption("All data is sanitized sample data.")
+
+        st.divider()
+        st.subheader("Your documents")
+        uploads = st.file_uploader(
+            "Upload PDFs to query", type=["pdf"], accept_multiple_files=True,
+            help="Your file is parsed and queried with citations like "
+                 "[DOC:yourfile.pdf:p2]. It is not stored after the session.",
+        )
+        store = st.session_state.setdefault("uploaded", {})
+        if uploads:
+            current = {f"{u.name}:{u.size}" for u in uploads}
+            for u in uploads:
+                key = f"{u.name}:{u.size}"
+                if key not in store:
+                    with st.spinner(f"Parsing {u.name}…"):
+                        store[key] = doc_retriever.parse_pdf_bytes(
+                            u.getvalue(), u.name)
+            for key in [k for k in store if k not in current]:
+                del store[key]
+        for chunks in store.values():
+            extra_docs.extend(chunks)
+        if extra_docs:
+            files = sorted({c.file for c in extra_docs})
+            st.success(f"{len(files)} uploaded · {len(extra_docs)} pages "
+                       f"indexed: {', '.join(files)}")
+
+        st.divider()
+        allow_ungrounded = st.checkbox(
+            "Answer from general knowledge if not in sources",
+            value=False,
+            help="Off (default): the assistant only answers from your data and "
+                 "documents, and says when something isn't covered. On: it may "
+                 "add a general-knowledge answer, clearly labelled as NOT "
+                 "grounded in your sources, with no citations.",
+        )
+
         st.divider()
         st.caption("Try a sample question:")
         for i, q in enumerate(SAMPLE_QUESTIONS):
@@ -177,7 +221,8 @@ def main() -> None:
 
     st.title("Ask a business question")
     st.caption("English or Hebrew. Questions that need both the database and "
-               "the documents are the interesting ones.")
+               "the documents are the interesting ones. Upload your own PDFs in "
+               "the sidebar to query them.")
 
     question = st.text_area(
         "Question", value=st.session_state.get("question", ""),
@@ -197,7 +242,11 @@ def main() -> None:
         st.session_state["used"] = used + 1
         try:
             with st.spinner("Routing, retrieving, and grounding the answer..."):
-                trace = answer(question.strip())
+                trace = answer(
+                    question.strip(),
+                    extra_docs=extra_docs or None,
+                    allow_ungrounded=allow_ungrounded,
+                )
         except Exception as exc:
             st.error(f"Error: {exc}")
             if "credential" in str(exc).lower():

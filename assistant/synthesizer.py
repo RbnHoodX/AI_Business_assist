@@ -60,11 +60,18 @@ SCHEMA = {
 }
 
 
+UNGROUNDED_MARKER = "NOT GROUNDED IN YOUR SOURCES"
+
+
 @dataclass
 class Answer:
     text: str
     cited_ids: list[str] = field(default_factory=list)
     coverage_gaps: list[str] = field(default_factory=list)
+
+    @property
+    def is_ungrounded(self) -> bool:
+        return UNGROUNDED_MARKER in self.text
 
 
 def _clean(text: str) -> str:
@@ -109,18 +116,36 @@ INTENT_GUIDANCE = {
 }
 
 
+GROUNDED_ONLY = (
+    "If the evidence does not contain the answer, say so plainly — state that it "
+    "is not available in the provided sources. Do NOT answer from outside or "
+    "general knowledge."
+)
+
+UNGROUNDED_OK = (
+    "If the evidence does not contain the answer, you MAY add an answer from your "
+    "own general knowledge, but it MUST be clearly separated and begin with the "
+    "exact line '⚠️ NOT GROUNDED IN YOUR SOURCES:'. Do NOT attach any [DB:..] or "
+    "[DOC:..] citation to a general-knowledge statement — citations are only for "
+    "facts taken from the evidence."
+)
+
+
 def synthesize(
     question: str,
     sql: SqlResult | None,
     hits: list[DocHit],
     intent: str = "facts",
+    allow_ungrounded: bool = False,
 ) -> Answer:
     guidance = INTENT_GUIDANCE.get(intent, INTENT_GUIDANCE["facts"])
+    grounding = UNGROUNDED_OK if allow_ungrounded else GROUNDED_ONLY
     user = (
         f"Today's date is {config.REFERENCE_DATE}. Treat any date reasoning "
         f"(e.g. 'next 90 days') as relative to this date; do not hedge about not "
         f"knowing the current date.\n\n"
         f"Question intent: {intent}. {guidance}\n\n"
+        f"Grounding policy: {grounding}\n\n"
         f"User question:\n{question}\n\n"
         f"EVIDENCE (cite by the bracketed id):\n{_evidence_block(sql, hits)}"
     )

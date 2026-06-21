@@ -75,6 +75,32 @@ def build_corpus_cache() -> int:
     return len(pages)
 
 
+def parse_pdf_bytes(data: bytes, filename: str) -> list[Chunk]:
+    """Parse an uploaded PDF (raw bytes) into page-level chunks.
+
+    Used by the web app so a user can drop in their own document and query it
+    immediately, with citations of the form [DOC:<filename>:p<page>]. No database
+    row is required — the chunks join the retrieval pool directly.
+    """
+    import io
+    import pdfplumber
+
+    m = _ENTITY.search(filename)
+    entity_id = m.group(1).upper() if m else filename
+    chunks: list[Chunk] = []
+    with pdfplumber.open(io.BytesIO(data)) as pdf:
+        for i, page in enumerate(pdf.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            if not text:
+                continue
+            chunks.append(Chunk(
+                file=filename, page=i, entity_id=entity_id,
+                heading=text.split("\n", 1)[0].strip(),
+                text=text, tokens=_tokenize(text),
+            ))
+    return chunks
+
+
 @lru_cache(maxsize=1)
 def _index() -> list[Chunk]:
     """Load page chunks from the cache, or parse the PDFs if it is missing."""
@@ -140,26 +166,33 @@ def retrieve(
     restrict_files: list[str] | None = None,
     top_k: int | None = None,
     per_file: int = 3,
+    extra: list[Chunk] | None = None,
 ) -> list[DocHit]:
     """Return ranked page chunks for a query.
 
+    `extra` holds chunks from user-uploaded documents; they always join the
+    candidate pool so an uploaded file is queryable even though it has no
+    database row.
+
     Two modes:
       - entity-scoped (restrict_files set): the SQL step has already picked the
-        relevant documents, so return the top `per_file` pages of EACH of those
-        documents. This guarantees every linked contract/project contributes its
-        most relevant sections, instead of a global top-k that can let the best
-        pages of one document crowd out another's (e.g. a drifting query ranking
-        every contract's termination page above its penalty page). It also lets a
-        document whose pages don't lexically match the query (a Hebrew contract
-        under an English query) still surface its pages for the model to read.
-      - unscoped: a global BM25 top-k over the whole corpus.
+        relevant documents, so return the top `per_file` pages of EACH document
+        (plus any uploaded docs). This guarantees every linked document
+        contributes its most relevant sections, and lets a document whose pages
+        don't lexically match the query (a Hebrew contract under an English
+        query) still surface its pages for the model to read.
+      - unscoped: a global BM25 top-k over the corpus plus any uploaded docs.
     """
+    extra = list(extra or [])
     top_k = top_k or config.DOC_TOP_K
-    chunks = _index()
-    scoped = chunks
+    if extra:
+        top_k = max(top_k, 8)
+    corpus = _index()
     if restrict_files:
-        sel = [c for c in chunks if c.file in set(restrict_files)]
-        scoped = sel or chunks
+        sel = [c for c in corpus if c.file in set(restrict_files)]
+        scoped = (sel or corpus) + extra
+    else:
+        scoped = corpus + extra
     if not scoped:
         return []
 
