@@ -75,13 +75,39 @@ def build_corpus_cache() -> int:
     return len(pages)
 
 
-def parse_pdf_bytes(data: bytes, filename: str) -> list[Chunk]:
-    """Parse an uploaded PDF (raw bytes) into page-level chunks.
+SUPPORTED_UPLOADS = ("pdf", "docx", "xlsx", "xls", "txt", "md")
 
-    Used by the web app so a user can drop in their own document and query it
-    immediately, with citations of the form [DOC:<filename>:p<page>]. No database
-    row is required — the chunks join the retrieval pool directly.
+
+def _chunk(file: str, page: int, text: str) -> Chunk:
+    return Chunk(
+        file=file, page=page, entity_id=file,
+        heading=text.split("\n", 1)[0].strip()[:120],
+        text=text, tokens=_tokenize(text),
+    )
+
+
+def parse_upload(data: bytes, filename: str) -> list[Chunk]:
+    """Parse an uploaded document (PDF / Word / Excel / text) into chunks.
+
+    A user can drop in their own file and query it immediately, with citations
+    like [DOC:<filename>:p<n>]. No database row is required — the chunks join the
+    retrieval pool directly. PDFs chunk by page; Word by ~page-sized blocks;
+    Excel by sheet.
     """
+    name = filename.lower()
+    if name.endswith(".pdf"):
+        return parse_pdf_bytes(data, filename)
+    if name.endswith(".docx"):
+        return _parse_docx(data, filename)
+    if name.endswith((".xlsx", ".xls")):
+        return _parse_xlsx(data, filename)
+    # plain text / markdown
+    text = data.decode("utf-8", errors="ignore").strip()
+    return [_chunk(filename, 1, text)] if text else []
+
+
+def parse_pdf_bytes(data: bytes, filename: str) -> list[Chunk]:
+    """Parse a PDF (raw bytes) into page-level chunks."""
     import io
     import pdfplumber
 
@@ -95,9 +121,56 @@ def parse_pdf_bytes(data: bytes, filename: str) -> list[Chunk]:
                 continue
             chunks.append(Chunk(
                 file=filename, page=i, entity_id=entity_id,
-                heading=text.split("\n", 1)[0].strip(),
+                heading=text.split("\n", 1)[0].strip()[:120],
                 text=text, tokens=_tokenize(text),
             ))
+    return chunks
+
+
+def _parse_docx(data: bytes, filename: str) -> list[Chunk]:
+    """Word document -> chunks (~page-sized blocks of paragraphs + tables)."""
+    import io
+    from docx import Document
+
+    doc = Document(io.BytesIO(data))
+    lines: list[str] = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                lines.append(" | ".join(cells))
+
+    chunks: list[Chunk] = []
+    buf: list[str] = []
+    size, page = 0, 1
+    for line in lines:
+        buf.append(line)
+        size += len(line)
+        if size >= 1500:  # ~page-sized block
+            chunks.append(_chunk(filename, page, "\n".join(buf)))
+            buf, size, page = [], 0, page + 1
+    if buf:
+        chunks.append(_chunk(filename, page, "\n".join(buf)))
+    return chunks
+
+
+def _parse_xlsx(data: bytes, filename: str) -> list[Chunk]:
+    """Excel workbook -> one chunk per sheet (rows rendered as text)."""
+    import io
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    chunks: list[Chunk] = []
+    for i, ws in enumerate(wb.worksheets, start=1):
+        rows: list[str] = []
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(c) for c in row if c is not None]
+            if cells:
+                rows.append(" | ".join(cells))
+        if rows:
+            text = f"Sheet: {ws.title}\n" + "\n".join(rows)
+            chunks.append(_chunk(filename, i, text))
+    wb.close()
     return chunks
 
 
@@ -167,12 +240,15 @@ def retrieve(
     top_k: int | None = None,
     per_file: int = 3,
     extra: list[Chunk] | None = None,
+    only_extra: bool = False,
 ) -> list[DocHit]:
     """Return ranked page chunks for a query.
 
     `extra` holds chunks from user-uploaded documents; they always join the
     candidate pool so an uploaded file is queryable even though it has no
-    database row.
+    database row. With `only_extra`, the sample corpus is ignored entirely and
+    the search runs over the uploaded documents alone (used when the user wants
+    to query just their own files).
 
     Two modes:
       - entity-scoped (restrict_files set): the SQL step has already picked the
@@ -187,12 +263,18 @@ def retrieve(
     top_k = top_k or config.DOC_TOP_K
     if extra:
         top_k = max(top_k, 8)
-    corpus = _index()
-    if restrict_files:
+    corpus = [] if only_extra else _index()
+    if restrict_files and not only_extra:
         sel = [c for c in corpus if c.file in set(restrict_files)]
         scoped = (sel or corpus) + extra
+        per_file_mode = True
+    elif only_extra:
+        scoped = extra
+        per_file_mode = True       # cover every uploaded file
+        per_file = max(per_file, 10)  # small uploads: surface (nearly) all pages
     else:
         scoped = corpus + extra
+        per_file_mode = False
     if not scoped:
         return []
 
@@ -200,7 +282,7 @@ def retrieve(
     q = _tokenize(query)
     scored = [(bm.score(q, i), c) for i, c in enumerate(scoped)]
 
-    if restrict_files:
+    if per_file_mode:
         by_file: dict[str, list[tuple[float, Chunk]]] = {}
         for s, c in scored:
             by_file.setdefault(c.file, []).append((s, c))

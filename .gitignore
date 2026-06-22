@@ -7,3 +7,8 @@ __pycache__/
 .playwright-mcp/
 webdemo_verify.png
 Untitled-1
+
+# client-provided test files (do not commit)
+*FAMILY COURT*
+*Carter*
+story*.pdf

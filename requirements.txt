@@ -2,3 +2,5 @@ anthropic>=0.40
 reportlab>=4.0
 pdfplumber>=0.11
 streamlit>=1.40
+python-docx>=1.1
+openpyxl>=3.1

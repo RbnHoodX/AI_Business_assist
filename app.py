@@ -162,7 +162,7 @@ def main() -> None:
     # On a Streamlit Cloud redeploy the entry script can reload a moment before
     # its imported modules do. Detect that stale window and ask for a refresh
     # instead of crashing with an AttributeError.
-    if not hasattr(doc_retriever, "parse_pdf_bytes"):
+    if not hasattr(doc_retriever, "parse_upload"):
         st.warning("The app is finishing an update. Please reload the page in a "
                    "minute (or use Manage app → Reboot).")
         st.stop()
@@ -188,7 +188,9 @@ def main() -> None:
         st.divider()
         st.subheader("Your documents")
         uploads = st.file_uploader(
-            "Upload PDFs to query", type=["pdf"], accept_multiple_files=True,
+            "Upload PDF, Word, or Excel to query",
+            type=["pdf", "docx", "xlsx", "xls", "txt", "md"],
+            accept_multiple_files=True,
             help="Your file is parsed and queried with citations like "
                  "[DOC:yourfile.pdf:p2]. It is not stored after the session.",
         )
@@ -199,16 +201,28 @@ def main() -> None:
                 key = f"{u.name}:{u.size}"
                 if key not in store:
                     with st.spinner(f"Parsing {u.name}…"):
-                        store[key] = doc_retriever.parse_pdf_bytes(
-                            u.getvalue(), u.name)
+                        try:
+                            store[key] = doc_retriever.parse_upload(
+                                u.getvalue(), u.name)
+                        except Exception as exc:
+                            store[key] = []
+                            st.error(f"Could not read {u.name}: {exc}")
             for key in [k for k in store if k not in current]:
                 del store[key]
         for chunks in store.values():
             extra_docs.extend(chunks)
+
+        only_uploaded = False
         if extra_docs:
             files = sorted({c.file for c in extra_docs})
-            st.success(f"{len(files)} uploaded · {len(extra_docs)} pages "
-                       f"indexed: {', '.join(files)}")
+            st.success(f"{len(files)} uploaded · {len(extra_docs)} sections "
+                       f"indexed")
+            only_uploaded = st.checkbox(
+                "Search only my uploaded documents", value=True,
+                help="On: answer only from the files you uploaded (ignore the "
+                     "sample database and contracts). Off: also use the sample "
+                     "data.",
+            )
 
         st.divider()
         allow_ungrounded = st.checkbox(
@@ -254,6 +268,7 @@ def main() -> None:
                     question.strip(),
                     extra_docs=extra_docs or None,
                     allow_ungrounded=allow_ungrounded,
+                    only_uploaded=only_uploaded,
                 )
         except Exception as exc:
             st.error(f"Error: {exc}")

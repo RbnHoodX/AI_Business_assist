@@ -39,11 +39,17 @@ def answer(
     *,
     extra_docs: list[Chunk] | None = None,
     allow_ungrounded: bool = False,
+    only_uploaded: bool = False,
 ) -> Trace:
     r = router.route(question)
-    # If the user uploaded documents, always consult them even if the router
-    # leaned SQL-only.
-    if extra_docs and not r.needs_docs:
+    only_uploaded = bool(only_uploaded and extra_docs)
+    if only_uploaded:
+        # Query the user's own documents only — ignore the sample DB + corpus.
+        r.sources = ["docs"]
+        r.doc_query = r.doc_query or question
+    elif extra_docs and not r.needs_docs:
+        # Uploaded docs present: always consult them even if the router leaned
+        # SQL-only.
         r.sources = sorted(set(r.sources) | {"docs"})
         r.doc_query = r.doc_query or question
     trace = Trace(question=question, route=r)
@@ -59,7 +65,8 @@ def answer(
         trace.restrict_files = restrict
         doc_query = r.doc_query or question
         trace.doc_hits = doc_retriever.retrieve(
-            doc_query, restrict_files=restrict or None, extra=extra_docs
+            doc_query, restrict_files=restrict or None,
+            extra=extra_docs, only_extra=only_uploaded,
         )
 
     # 3. Grounded synthesis over the merged evidence, shaped by the intent.
